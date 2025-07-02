@@ -1,10 +1,53 @@
 # SSLMate MCP Server
 
-An MCP (Model Context Protocol) server that provides certificate search functionality using the SSLMate API.
+An MCP (Model Context Protocol) server that provides certificate search fu```bash
+export SSLMATE_API_KEY="your-sslmate-api-key"
+export LOG_LEVEL="INFO"  # Optional, defaults to INFO
+```
+
+Alternatively, create a `.env` file:
+
+```env
+SSLMATE_API_KEY=your-sslmate-api-key
+LOG_LEVEL=INFO
+```sing the SSLMate API.
 
 ## Features
 
-- Search SSL/TLS certificates by domain name, organization, or other criteria
+- Search SSL/TLS certificates by domain name, organizati# Set your API key
+export SSLMATE      ],
+      "env": {
+        "SSLMATE_API_KEY": "your-sslmate-api-key",
+        "LOG_LEVEL": "INFO"
+      }E#### Server Not Starting
+- Check th2. **Run the server manually first:**
+   ```bash
+   uv run sslmate_mcp.py
+   # The server will wait for JSON-RPC input via stdio
+   ```
+
+3. **Check Claude Desktop logs:**
+   - macOS: `~/Library/Logs/Claude/`
+   - Windows: `%LOCALAPPDATA%\Claude\logs\`
+
+4. **Test MCP protocol manually (advanced):**
+   ```bash
+   echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}},"id":1}' | uv run sslmate_mcp.py
+   ```API key is correct
+- Verify the script path in Claude Desktop configuration is correct
+- Check the logs in the Claude Desktop developer tools
+
+#### Tools Not Appearing in Claude
+- Verify the path in the configuration file is absolute and correct
+- Check that `uv` is installed and available in your PATH
+- Restart Claude Desktop after making configuration changes
+- Check Claude Desktop's MCP logs for error messageslmate-api-key"
+
+# Test the server (it will communicate via stdio)
+uv run sslmate_mcp.py
+```
+
+**Note**: The MCP server uses stdio for communication, so when you run it directly, it will wait for JSON-RPC input. To test it properly, use it through Claude Desktop or another MCP client.ther criteria
 - Get detailed certificate information
 - Run in foreground or daemon mode
 - Single file deployment for easy management
@@ -79,14 +122,8 @@ LOG_LEVEL=INFO
 
 ### Quick Start with uv (Recommended):
 ```bash
-# Run in foreground with automatic dependency management
+# Run the MCP server - it will communicate via stdio
 uv run sslmate_mcp.py
-
-# Run as daemon
-uv run sslmate_mcp.py --daemon
-
-# Specify custom port
-uv run sslmate_mcp.py --port 9000
 
 # Use custom configuration file
 uv run sslmate_mcp.py --config /path/to/config.env
@@ -94,60 +131,37 @@ uv run sslmate_mcp.py --config /path/to/config.env
 
 ### Traditional Python execution:
 ```bash
-# Run in foreground (requires manual dependency installation)
+# Run the MCP server (requires manual dependency installation)
 python sslmate_mcp.py
-
-# Run as daemon
-python sslmate_mcp.py --daemon
-
-# Specify custom port
-python sslmate_mcp.py --port 9000
 
 # Use custom configuration file
 python sslmate_mcp.py --config /path/to/config.env
 ```
 
+**Note**: This MCP server communicates via standard input/output (stdio) as per the MCP protocol specification. It is designed to be used with MCP clients like Claude Desktop rather than accessed directly via HTTP.
+
 ## MCP Tools
 
-The server provides the following MCP tools via HTTP endpoints:
+The server provides the following MCP tools via the standard MCP protocol:
 
-### `POST /tools/search_certificates`
+### `search_certificates`
 Search for SSL/TLS certificates using various criteria.
-
-**Request Body:**
-```json
-{
-  "query": "example.com",
-  "limit": 50,
-  "include_expired": false
-}
-```
 
 **Parameters:**
 - `query` (string): Search term (domain name, organization, etc.)
 - `limit` (int, optional): Maximum number of results (default: 100)
 - `include_expired` (bool, optional): Include expired certificates (default: false)
 
-### `POST /tools/get_certificate_details`
+### `get_certificate_details`
 Get detailed information about a specific certificate.
-
-**Request Body:**
-```json
-{
-  "cert_id": "cert-12345"
-}
-```
 
 **Parameters:**
 - `cert_id` (string): The certificate ID from SSLMate
 
 ## MCP Resources
 
-### `GET /resources/sslmate/search/{query}`
+### `sslmate://search/{query}`
 Resource endpoint for certificate search results.
-
-### `GET /`
-Server information and available tools/resources.
 
 ## Development
 

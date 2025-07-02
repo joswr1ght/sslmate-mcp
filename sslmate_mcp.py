@@ -1,13 +1,23 @@
-#!/usr/bin/env python3
-# /// script
+#!/usr/bin"""
+SSLMate MCP Server
+
+A Model Context Protocol (MCP) server that provides certificate search functionality
+using the SSLMate API. This server communicates via stdio as per MCP protocol.
+
+Usage:
+    uv run sslmate_mcp.py [--config CONFIG_FILE]
+    python sslmate_mcp.py [--config CONFIG_FILE]
+
+Environment Variables:
+    SSLMATE_API_KEY: Your SSLMate API key (required)
+    LOG_LEVEL: Logging level (default: INFO)
+"""/// script
 # requires-python = ">=3.8"
 # dependencies = [
 #     "mcp>=1.0.0",
 #     "httpx>=0.24.0",
 #     "pydantic>=2.0.0",
 #     "python-dotenv>=1.0.0",
-#     "fastapi>=0.104.0",
-#     "uvicorn>=0.24.0",
 # ]
 # ///
 """
@@ -39,9 +49,6 @@ from pathlib import Path
 import httpx
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-import uvicorn
 
 
 # Load environment variables
@@ -150,16 +157,187 @@ class SSLMateClient:
         await self.client.aclose()
 
 
-class MCPRequest(BaseModel):
-    """Model for MCP requests"""
-    method: str
-    params: dict = Field(default_factory=dict)
+class MCPServer:
+    """Simple MCP server implementation using stdio"""
 
+    def __init__(self, name: str, version: str = "1.0.0"):
+        self.name = name
+        self.version = version
+        self.tools = {}
+        self.resources = {}
+        self.running = False
 
-class MCPResponse(BaseModel):
-    """Model for MCP responses"""
-    result: dict = Field(default_factory=dict)
-    error: Optional[dict] = None
+    def add_tool(self, name: str, description: str, parameters: dict, handler):
+        """Add a tool to the server"""
+        self.tools[name] = {
+            "name": name,
+            "description": description,
+            "inputSchema": {
+                "type": "object",
+                "properties": parameters,
+                "required": list(parameters.keys())
+            },
+            "handler": handler
+        }
+
+    def add_resource(self, uri_template: str, description: str, handler):
+        """Add a resource to the server"""
+        self.resources[uri_template] = {
+            "uri": uri_template,
+            "description": description,
+            "handler": handler
+        }
+
+    async def handle_request(self, request: dict) -> dict:
+        """Handle incoming MCP requests"""
+        method = request.get("method")
+        params = request.get("params", {})
+        request_id = request.get("id")
+
+        try:
+            if method == "initialize":
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {
+                            "tools": {},
+                            "resources": {}
+                        },
+                        "serverInfo": {
+                            "name": self.name,
+                            "version": self.version
+                        }
+                    }
+                }
+
+            elif method == "tools/list":
+                tools_list = []
+                for tool_name, tool_info in self.tools.items():
+                    tools_list.append({
+                        "name": tool_info["name"],
+                        "description": tool_info["description"],
+                        "inputSchema": tool_info["inputSchema"]
+                    })
+
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "tools": tools_list
+                    }
+                }
+
+            elif method == "tools/call":
+                tool_name = params.get("name")
+                arguments = params.get("arguments", {})
+
+                if tool_name in self.tools:
+                    handler = self.tools[tool_name]["handler"]
+                    result = await handler(**arguments)
+
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": json.dumps(result, indent=2)
+                                }
+                            ]
+                        }
+                    }
+                else:
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {
+                            "code": -32601,
+                            "message": f"Tool not found: {tool_name}"
+                        }
+                    }
+
+            elif method == "resources/list":
+                resources_list = []
+                for resource_uri, resource_info in self.resources.items():
+                    resources_list.append({
+                        "uri": resource_info["uri"],
+                        "description": resource_info["description"]
+                    })
+
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "resources": resources_list
+                    }
+                }
+
+            else:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {
+                        "code": -32601,
+                        "message": f"Method not found: {method}"
+                    }
+                }
+
+        except Exception as e:
+            logger.error(f"Error handling request: {e}")
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32603,
+                    "message": f"Internal error: {str(e)}"
+                }
+            }
+
+    async def run_stdio(self):
+        """Run the server using stdio for communication"""
+        self.running = True
+        logger.info(f"Starting {self.name} MCP server")
+
+        try:
+            while self.running:
+                # Read from stdin
+                line = sys.stdin.readline()
+                if not line:
+                    break
+
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    request = json.loads(line)
+                    response = await self.handle_request(request)
+
+                    # Write response to stdout
+                    print(json.dumps(response), flush=True)
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON received: {e}")
+                    error_response = {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {
+                            "code": -32700,
+                            "message": "Parse error"
+                        }
+                    }
+                    print(json.dumps(error_response), flush=True)
+
+        except KeyboardInterrupt:
+            logger.info("Received interrupt signal")
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+        finally:
+            self.running = False
+            logger.info("MCP server stopped")
 
 
 class SSLMateMCPServer:
@@ -169,53 +347,16 @@ class SSLMateMCPServer:
         self.api_key = api_key
         self.port = port
         self.sslmate_client = SSLMateClient(api_key)
-        self.app = FastAPI(title="SSLMate MCP Server", version="0.1.0")
-        self._setup_routes()
+        self.mcp_server = MCPServer("sslmate-mcp", "0.1.0")
+        self._setup_tools()
+        self._setup_resources()
 
-    def _setup_routes(self):
-        """Setup FastAPI routes for MCP protocol"""
+    def _setup_tools(self):
+        """Setup MCP tools"""
 
-        @self.app.get("/")
-        async def root():
-            """Root endpoint with server information"""
-            return {
-                "name": "sslmate-mcp",
-                "version": "0.1.0",
-                "description": "SSLMate MCP Server for certificate search",
-                "tools": [
-                    {
-                        "name": "search_certificates",
-                        "description": "Search for SSL/TLS certificates",
-                        "parameters": {
-                            "query": {"type": "string", "description": "Search term"},
-                            "limit": {"type": "integer", "default": 100},
-                            "include_expired": {"type": "boolean", "default": False}
-                        }
-                    },
-                    {
-                        "name": "get_certificate_details",
-                        "description": "Get certificate details",
-                        "parameters": {
-                            "cert_id": {"type": "string", "description": "Certificate ID"}
-                        }
-                    }
-                ],
-                "resources": [
-                    {
-                        "uri": "sslmate://search/{query}",
-                        "description": "Certificate search results"
-                    }
-                ]
-            }
-
-        @self.app.post("/tools/search_certificates")
-        async def search_certificates_tool(request: dict):
-            """Tool endpoint for certificate search"""
+        async def search_certificates_handler(query: str, limit: int = 100, include_expired: bool = False):
+            """Handler for certificate search tool"""
             try:
-                query = request.get("query", "")
-                limit = request.get("limit", 100)
-                include_expired = request.get("include_expired", False)
-
                 certificates = await self.sslmate_client.search_certificates(
                     query, limit, include_expired
                 )
@@ -232,16 +373,14 @@ class SSLMateMCPServer:
 
             except Exception as e:
                 logger.error(f"Error in search_certificates tool: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                return {
+                    "error": str(e),
+                    "query": query
+                }
 
-        @self.app.post("/tools/get_certificate_details")
-        async def get_certificate_details_tool(request: dict):
-            """Tool endpoint for certificate details"""
+        async def get_certificate_details_handler(cert_id: str):
+            """Handler for certificate details tool"""
             try:
-                cert_id = request.get("cert_id", "")
-                if not cert_id:
-                    raise HTTPException(status_code=400, detail="cert_id is required")
-
                 certificate = await self.sslmate_client.get_certificate_details(cert_id)
 
                 if certificate:
@@ -255,15 +394,39 @@ class SSLMateMCPServer:
                         "certificate_id": cert_id
                     }
 
-            except HTTPException:
-                raise
             except Exception as e:
                 logger.error(f"Error in get_certificate_details tool: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                return {
+                    "error": str(e),
+                    "certificate_id": cert_id
+                }
 
-        @self.app.get("/resources/sslmate/search/{query}")
-        async def search_resource(query: str):
-            """Resource endpoint for certificate search"""
+        # Add tools to the MCP server
+        self.mcp_server.add_tool(
+            "search_certificates",
+            "Search for SSL/TLS certificates using SSLMate API",
+            {
+                "query": {"type": "string", "description": "Search term (domain name, organization, etc.)"},
+                "limit": {"type": "integer", "description": "Maximum number of results (default: 100)", "default": 100},
+                "include_expired": {"type": "boolean", "description": "Include expired certificates (default: false)", "default": False}
+            },
+            search_certificates_handler
+        )
+
+        self.mcp_server.add_tool(
+            "get_certificate_details",
+            "Get detailed information about a specific certificate",
+            {
+                "cert_id": {"type": "string", "description": "Certificate ID from SSLMate"}
+            },
+            get_certificate_details_handler
+        )
+
+    def _setup_resources(self):
+        """Setup MCP resources"""
+
+        async def search_resource_handler(query: str):
+            """Handler for certificate search resource"""
             try:
                 certificates = await self.sslmate_client.search_certificates(query)
 
@@ -273,27 +436,23 @@ class SSLMateMCPServer:
                     "certificates": [cert.model_dump() for cert in certificates]
                 }
 
-                return result
+                return json.dumps(result, indent=2)
 
             except Exception as e:
-                logger.error(f"Error in search resource: {e}")
-                raise HTTPException(status_code=500, detail=str(e))
+                return json.dumps({"error": str(e), "query": query}, indent=2)
+
+        self.mcp_server.add_resource(
+            "sslmate://search/{query}",
+            "Certificate search results",
+            search_resource_handler
+        )
 
     async def start(self):
         """Start the MCP server"""
-        logger.info(f"Starting SSLMate MCP Server on port {self.port}")
-
-        config = uvicorn.Config(
-            app=self.app,
-            host="0.0.0.0",
-            port=self.port,
-            log_level=LOG_LEVEL.lower()
-        )
-        server = uvicorn.Server(config)
+        logger.info("Starting SSLMate MCP Server")
 
         try:
-            await server.serve()
-            logger.info("SSLMate MCP Server started successfully")
+            await self.mcp_server.run_stdio()
 
         except Exception as e:
             logger.error(f"Failed to start MCP server: {e}")
@@ -305,91 +464,20 @@ class SSLMateMCPServer:
 
         try:
             await self.sslmate_client.close()
+            self.mcp_server.running = False
             logger.info("SSLMate MCP Server stopped successfully")
 
         except Exception as e:
             logger.error(f"Error stopping MCP server: {e}")
 
 
-class DaemonRunner:
-    """Handle daemon mode operations"""
-
-    def __init__(self, server: SSLMateMCPServer, pid_file: str = "/tmp/sslmate-mcp.pid"):
-        self.server = server
-        self.pid_file = pid_file
-        self.running = True
-        self.server_task = None
-
-    def _write_pid_file(self):
-        """Write the current process ID to the PID file"""
-        try:
-            with open(self.pid_file, 'w') as f:
-                f.write(str(os.getpid()))
-            logger.info(f"PID file written: {self.pid_file}")
-        except Exception as e:
-            logger.error(f"Failed to write PID file: {e}")
-
-    def _remove_pid_file(self):
-        """Remove the PID file"""
-        try:
-            if os.path.exists(self.pid_file):
-                os.remove(self.pid_file)
-                logger.info(f"PID file removed: {self.pid_file}")
-        except Exception as e:
-            logger.error(f"Failed to remove PID file: {e}")
-
-    def _signal_handler(self, signum, frame):
-        """Handle shutdown signals"""
-        logger.info(f"Received signal {signum}, shutting down...")
-        self.running = False
-        if self.server_task:
-            self.server_task.cancel()
-
-    async def run_daemon(self):
-        """Run the server in daemon mode"""
-        # Setup signal handlers
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
-
-        # Write PID file
-        self._write_pid_file()
-
-        try:
-            # Start the server as a background task
-            self.server_task = asyncio.create_task(self.server.start())
-
-            # Keep running until shutdown signal
-            while self.running:
-                await asyncio.sleep(1)
-
-        except asyncio.CancelledError:
-            logger.info("Server task cancelled")
-        except Exception as e:
-            logger.error(f"Error in daemon mode: {e}")
-
-        finally:
-            await self.server.stop()
-            self._remove_pid_file()
-
-
 async def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description="SSLMate MCP Server")
     parser.add_argument(
-        "--daemon",
-        action="store_true",
-        help="Run as daemon"
-    )
-    parser.add_argument(
         "--config",
         type=str,
         help="Configuration file path"
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=DEFAULT_PORT,
-        help=f"Port to run server on (default: {DEFAULT_PORT})"
     )
     parser.add_argument(
         "--api-key",
@@ -410,33 +498,17 @@ async def main():
         sys.exit(1)
 
     # Create server instance
-    server = SSLMateMCPServer(api_key, args.port)
+    server = SSLMateMCPServer(api_key)
 
     try:
-        if args.daemon:
-            # Run in daemon mode
-            daemon = DaemonRunner(server)
-            await daemon.run_daemon()
-        else:
-            # Run in foreground
-            server_task = asyncio.create_task(server.start())
-
-            # Wait for interrupt
-            try:
-                await server_task
-            except KeyboardInterrupt:
-                logger.info("Received interrupt, shutting down...")
-                server_task.cancel()
-                try:
-                    await server_task
-                except asyncio.CancelledError:
-                    pass
-            finally:
-                await server.stop()
+        # Run the MCP server
+        await server.start()
 
     except Exception as e:
         logger.error(f"Fatal error: {e}")
         sys.exit(1)
+    finally:
+        await server.stop()
 
 
 if __name__ == "__main__":
