@@ -63,7 +63,7 @@ Set up your environment variables:
 
 ```bash
 export SSLMATE_API_KEY="your-sslmate-api-key"
-export MCP_PORT="8080"  # Optional, defaults to 8080
+export MCP_PORT="3002"  # Optional, defaults to 3002
 export LOG_LEVEL="INFO"  # Optional, defaults to INFO
 ```
 
@@ -71,7 +71,7 @@ Alternatively, create a `.env` file:
 
 ```env
 SSLMATE_API_KEY=your-sslmate-api-key
-MCP_PORT=8080
+MCP_PORT=3002
 LOG_LEVEL=INFO
 ```
 
@@ -208,6 +208,208 @@ The server includes comprehensive error handling:
 - No sensitive information is logged
 - Input validation prevents injection attacks
 - HTTPS is used for all SSLMate API communications
+
+## Claude Desktop Integration
+
+This SSLMate MCP server can be integrated with Claude Desktop to provide certificate search functionality directly within your Claude conversations.
+
+### Prerequisites
+
+1. **Claude Desktop** - Download and install from [Claude.ai](https://claude.ai/download)
+2. **SSLMate API Key** - Obtain from [SSLMate](https://sslmate.com)
+3. **uv** - Install from [astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+### Setup Steps
+
+#### 1. Clone and Test the Server
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd sslmate-mcp
+
+# Set your API key
+export SSLMATE_API_KEY="your-sslmate-api-key"
+
+# Test the server (it should start on port 3002)
+uv run sslmate_mcp.py
+```
+
+Verify the server is working by visiting `http://localhost:3002` in your browser.
+
+#### 2. Configure Claude Desktop
+
+Claude Desktop uses a configuration file to connect to MCP servers. The location depends on your operating system:
+
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Create or edit this file with the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "sslmate": {
+      "command": "uv",
+      "args": [
+        "run",
+        "/full/path/to/sslmate-mcp/sslmate_mcp.py"
+      ],
+      "env": {
+        "SSLMATE_API_KEY": "your-sslmate-api-key",
+        "MCP_PORT": "3002",
+        "LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
+```
+
+**Important**: Replace `/full/path/to/sslmate-mcp/sslmate_mcp.py` with the actual absolute path to your script.
+
+#### 3. Alternative Configuration Options
+
+**Option A: Using environment variables from shell**
+```json
+{
+  "mcpServers": {
+    "sslmate": {
+      "command": "uv",
+      "args": [
+        "run",
+        "/full/path/to/sslmate-mcp/sslmate_mcp.py"
+      ]
+    }
+  }
+}
+```
+*Note: This requires setting `SSLMATE_API_KEY` in your system environment.*
+
+**Option B: Using a config file**
+```json
+{
+  "mcpServers": {
+    "sslmate": {
+      "command": "uv",
+      "args": [
+        "run",
+        "/full/path/to/sslmate-mcp/sslmate_mcp.py",
+        "--config",
+        "/full/path/to/sslmate-mcp/.env"
+      ]
+    }
+  }
+}
+```
+
+**Option C: Using system Python (if dependencies are installed)**
+```json
+{
+  "mcpServers": {
+    "sslmate": {
+      "command": "python3",
+      "args": ["/full/path/to/sslmate-mcp/sslmate_mcp.py"],
+      "env": {
+        "SSLMATE_API_KEY": "your-sslmate-api-key"
+      }
+    }
+  }
+}
+```
+
+#### 4. Restart Claude Desktop
+
+After updating the configuration file, restart Claude Desktop completely:
+
+1. Quit Claude Desktop
+2. Wait a few seconds
+3. Relaunch Claude Desktop
+
+#### 5. Verify Integration
+
+Once Claude Desktop restarts, you should see the SSLMate MCP server tools available. You can test the integration by asking Claude questions like:
+
+- "Search for certificates for example.com"
+- "Find SSL certificates issued to Google"
+- "Show me certificates for *.github.com"
+
+### Usage in Claude Desktop
+
+Once integrated, you can use natural language to interact with the certificate search functionality:
+
+#### Example Queries
+
+**Basic Certificate Search:**
+```
+Search for SSL certificates for "example.com"
+```
+
+**Advanced Search with Filters:**
+```
+Find certificates for "google.com" including expired ones, limit to 25 results
+```
+
+**Get Certificate Details:**
+```
+Get details for certificate ID "cert-12345"
+```
+
+**Domain Wildcard Search:**
+```
+Search for certificates for "*.github.com"
+```
+
+### Troubleshooting
+
+#### Server Not Starting
+- Check that your SSLMate API key is correct
+- Verify that port 3002 is not in use by another application
+- Check the logs in the Claude Desktop developer tools
+
+#### Tools Not Appearing in Claude
+- Verify the path in the configuration file is absolute and correct
+- Check that `uv` is installed and available in your PATH
+- Restart Claude Desktop after making configuration changes
+- Check Claude Desktop's MCP logs for error messages
+
+#### API Errors
+- Verify your SSLMate API key is valid and has sufficient quota
+- Check your internet connection
+- Review the server logs for specific error messages
+
+### Development and Debugging
+
+To debug MCP integration issues:
+
+1. **Enable file logging:**
+   ```bash
+   export LOG_TO_FILE=1
+   uv run sslmate_mcp.py
+   ```
+
+2. **Run the server manually first:**
+   ```bash
+   uv run sslmate_mcp.py
+   # Test at http://localhost:3002
+   ```
+
+3. **Check Claude Desktop logs:**
+   - macOS: `~/Library/Logs/Claude/`
+   - Windows: `%LOCALAPPDATA%\Claude\logs\`
+
+4. **Test server endpoints directly:**
+   ```bash
+   curl -X POST http://localhost:3002/tools/search_certificates \
+     -H "Content-Type: application/json" \
+     -d '{"query": "example.com"}'
+   ```
+
+### Security Notes
+
+- Store your SSLMate API key securely
+- Consider using environment variables instead of hardcoding keys in config files
+- The server runs locally and does not expose your API key to external services
+- All communication with SSLMate API uses HTTPS
 
 ## Contributing
 
