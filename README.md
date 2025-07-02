@@ -19,16 +19,43 @@ An MCP (Model Context Protocol) server that provides certificate search function
 
 ## Installation
 
-1. Clone this repository:
-```bash
-git clone <repository-url>
-cd sslmate-mcp
-```
+### Option 1: Quick Start with uv (Automatic Dependencies)
 
-2. Install dependencies using uv:
-```bash
-uv pip install -e .
-```
+The Python script includes inline dependency metadata, so you can run it directly with uv and it will automatically install dependencies:
+
+    ```bash
+    # Clone the repository
+    git clone <repository-url>
+    cd sslmate-mcp
+
+    # Run directly - uv will automatically install dependencies
+    uv run sslmate_mcp.py
+    ```
+
+This is the easiest way to get started! uv will create an isolated environment and install all required dependencies automatically.
+
+### Option 2: Manual Installation with Virtual Environment
+
+1. Clone this repository:
+    ```bash
+    git clone <repository-url>
+    cd sslmate-mcp
+    ```
+
+2. Set up the environment and install dependencies using uv:
+
+   ```bash
+   # Create a virtual environment
+   uv venv
+
+   # Activate the virtual environment
+   source .venv/bin/activate  # On macOS/Linux
+   # or
+   .venv\Scripts\activate     # On Windows
+
+   # Install the project and dependencies
+   uv pip install -e .
+   ```
 
 ## Configuration
 
@@ -50,29 +77,34 @@ LOG_LEVEL=INFO
 
 ## Usage
 
-### Run in foreground:
+### Quick Start with uv (Recommended):
 ```bash
-python sslmate_mcp.py
-```
-
-### Run as daemon:
-```bash
-python sslmate_mcp.py --daemon
-```
-
-### Specify custom port:
-```bash
-python sslmate_mcp.py --port 9000
-```
-
-### Use custom configuration file:
-```bash
-python sslmate_mcp.py --config /path/to/config.env
-```
-
-### Using uv to run:
-```bash
+# Run in foreground with automatic dependency management
 uv run sslmate_mcp.py
+
+# Run as daemon
+uv run sslmate_mcp.py --daemon
+
+# Specify custom port
+uv run sslmate_mcp.py --port 9000
+
+# Use custom configuration file
+uv run sslmate_mcp.py --config /path/to/config.env
+```
+
+### Traditional Python execution:
+```bash
+# Run in foreground (requires manual dependency installation)
+python sslmate_mcp.py
+
+# Run as daemon
+python sslmate_mcp.py --daemon
+
+# Specify custom port
+python sslmate_mcp.py --port 9000
+
+# Use custom configuration file
+python sslmate_mcp.py --config /path/to/config.env
 ```
 
 ## MCP Tools
@@ -124,7 +156,12 @@ Resource endpoint for certificate search results.
 
 ### Install development dependencies:
 ```bash
+# If using virtual environment (recommended)
+source .venv/bin/activate  # Activate if not already active
 uv pip install -e ".[dev]"
+
+# Or install system-wide
+uv pip install -e ".[dev]" --system
 ```
 
 ### Run tests:

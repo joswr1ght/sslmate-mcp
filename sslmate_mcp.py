@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#     "mcp>=1.0.0",
+#     "httpx>=0.24.0",
+#     "pydantic>=2.0.0",
+#     "python-dotenv>=1.0.0",
+# ]
+# ///
 """
 SSLMate MCP Server
 
@@ -6,6 +15,7 @@ A Model Context Protocol (MCP) server that provides certificate search functiona
 using the SSLMate API. This server can be run in the foreground or as a daemon.
 
 Usage:
+    uv run sslmate_mcp.py [--daemon] [--config CONFIG_FILE]
     python sslmate_mcp.py [--daemon] [--config CONFIG_FILE]
 
 Environment Variables:
