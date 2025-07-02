@@ -109,48 +109,45 @@ python sslmate_mcp.py --config /path/to/config.env
 
 ## MCP Tools
 
-The server provides the following MCP tools:
+The server provides the following MCP tools via HTTP endpoints:
 
-### `search_certificates`
+### `POST /tools/search_certificates`
 Search for SSL/TLS certificates using various criteria.
+
+**Request Body:**
+```json
+{
+  "query": "example.com",
+  "limit": 50,
+  "include_expired": false
+}
+```
 
 **Parameters:**
 - `query` (string): Search term (domain name, organization, etc.)
 - `limit` (int, optional): Maximum number of results (default: 100)
 - `include_expired` (bool, optional): Include expired certificates (default: false)
 
-**Example:**
+### `POST /tools/get_certificate_details`
+Get detailed information about a specific certificate.
+
+**Request Body:**
 ```json
 {
-  "tool": "search_certificates",
-  "arguments": {
-    "query": "example.com",
-    "limit": 50,
-    "include_expired": false
-  }
+  "cert_id": "cert-12345"
 }
 ```
-
-### `get_certificate_details`
-Get detailed information about a specific certificate.
 
 **Parameters:**
 - `cert_id` (string): The certificate ID from SSLMate
 
-**Example:**
-```json
-{
-  "tool": "get_certificate_details",
-  "arguments": {
-    "cert_id": "cert-12345"
-  }
-}
-```
-
 ## MCP Resources
 
-### `sslmate://search/{query}`
+### `GET /resources/sslmate/search/{query}`
 Resource endpoint for certificate search results.
+
+### `GET /`
+Server information and available tools/resources.
 
 ## Development
 

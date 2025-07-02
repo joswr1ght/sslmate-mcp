@@ -6,6 +6,8 @@
 #     "httpx>=0.24.0",
 #     "pydantic>=2.0.0",
 #     "python-dotenv>=1.0.0",
+#     "fastapi>=0.104.0",
+#     "uvicorn>=0.24.0",
 # ]
 # ///
 """
@@ -35,10 +37,11 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 
 import httpx
-from mcp import MCPServer
-from mcp.types import Resource, Tool
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+import uvicorn
 
 
 # Load environment variables
@@ -147,6 +150,18 @@ class SSLMateClient:
         await self.client.aclose()
 
 
+class MCPRequest(BaseModel):
+    """Model for MCP requests"""
+    method: str
+    params: dict = Field(default_factory=dict)
+
+
+class MCPResponse(BaseModel):
+    """Model for MCP responses"""
+    result: dict = Field(default_factory=dict)
+    error: Optional[dict] = None
+
+
 class SSLMateMCPServer:
     """MCP Server for SSLMate certificate search functionality"""
 
@@ -154,31 +169,53 @@ class SSLMateMCPServer:
         self.api_key = api_key
         self.port = port
         self.sslmate_client = SSLMateClient(api_key)
-        self.mcp_server = MCPServer("sslmate-mcp")
-        self._setup_tools()
-        self._setup_resources()
+        self.app = FastAPI(title="SSLMate MCP Server", version="0.1.0")
+        self._setup_routes()
 
-    def _setup_tools(self):
-        """Setup MCP tools"""
+    def _setup_routes(self):
+        """Setup FastAPI routes for MCP protocol"""
 
-        @self.mcp_server.tool("search_certificates")
-        async def search_certificates(
-            query: str,
-            limit: int = 100,
-            include_expired: bool = False
-        ) -> Dict[str, Any]:
-            """
-            Search for SSL/TLS certificates using SSLMate API
+        @self.app.get("/")
+        async def root():
+            """Root endpoint with server information"""
+            return {
+                "name": "sslmate-mcp",
+                "version": "0.1.0",
+                "description": "SSLMate MCP Server for certificate search",
+                "tools": [
+                    {
+                        "name": "search_certificates",
+                        "description": "Search for SSL/TLS certificates",
+                        "parameters": {
+                            "query": {"type": "string", "description": "Search term"},
+                            "limit": {"type": "integer", "default": 100},
+                            "include_expired": {"type": "boolean", "default": False}
+                        }
+                    },
+                    {
+                        "name": "get_certificate_details",
+                        "description": "Get certificate details",
+                        "parameters": {
+                            "cert_id": {"type": "string", "description": "Certificate ID"}
+                        }
+                    }
+                ],
+                "resources": [
+                    {
+                        "uri": "sslmate://search/{query}",
+                        "description": "Certificate search results"
+                    }
+                ]
+            }
 
-            Args:
-                query: Search term (domain name, organization, etc.)
-                limit: Maximum number of results to return (default: 100)
-                include_expired: Whether to include expired certificates (default: False)
-
-            Returns:
-                Dictionary containing search results and metadata
-            """
+        @self.app.post("/tools/search_certificates")
+        async def search_certificates_tool(request: dict):
+            """Tool endpoint for certificate search"""
             try:
+                query = request.get("query", "")
+                limit = request.get("limit", 100)
+                include_expired = request.get("include_expired", False)
+
                 certificates = await self.sslmate_client.search_certificates(
                     query, limit, include_expired
                 )
@@ -195,23 +232,16 @@ class SSLMateMCPServer:
 
             except Exception as e:
                 logger.error(f"Error in search_certificates tool: {e}")
-                return {
-                    "error": str(e),
-                    "query": query
-                }
+                raise HTTPException(status_code=500, detail=str(e))
 
-        @self.mcp_server.tool("get_certificate_details")
-        async def get_certificate_details(cert_id: str) -> Dict[str, Any]:
-            """
-            Get detailed information about a specific certificate
-
-            Args:
-                cert_id: The certificate ID from SSLMate
-
-            Returns:
-                Dictionary containing certificate details
-            """
+        @self.app.post("/tools/get_certificate_details")
+        async def get_certificate_details_tool(request: dict):
+            """Tool endpoint for certificate details"""
             try:
+                cert_id = request.get("cert_id", "")
+                if not cert_id:
+                    raise HTTPException(status_code=400, detail="cert_id is required")
+
                 certificate = await self.sslmate_client.get_certificate_details(cert_id)
 
                 if certificate:
@@ -225,19 +255,15 @@ class SSLMateMCPServer:
                         "certificate_id": cert_id
                     }
 
+            except HTTPException:
+                raise
             except Exception as e:
                 logger.error(f"Error in get_certificate_details tool: {e}")
-                return {
-                    "error": str(e),
-                    "certificate_id": cert_id
-                }
+                raise HTTPException(status_code=500, detail=str(e))
 
-    def _setup_resources(self):
-        """Setup MCP resources"""
-
-        @self.mcp_server.resource("sslmate://search/{query}")
-        async def search_resource(query: str) -> str:
-            """Resource for certificate search results"""
+        @self.app.get("/resources/sslmate/search/{query}")
+        async def search_resource(query: str):
+            """Resource endpoint for certificate search"""
             try:
                 certificates = await self.sslmate_client.search_certificates(query)
 
@@ -247,17 +273,26 @@ class SSLMateMCPServer:
                     "certificates": [cert.model_dump() for cert in certificates]
                 }
 
-                return json.dumps(result, indent=2)
+                return result
 
             except Exception as e:
-                return json.dumps({"error": str(e), "query": query}, indent=2)
+                logger.error(f"Error in search resource: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
 
     async def start(self):
         """Start the MCP server"""
         logger.info(f"Starting SSLMate MCP Server on port {self.port}")
 
+        config = uvicorn.Config(
+            app=self.app,
+            host="0.0.0.0",
+            port=self.port,
+            log_level=LOG_LEVEL.lower()
+        )
+        server = uvicorn.Server(config)
+
         try:
-            await self.mcp_server.start(port=self.port)
+            await server.serve()
             logger.info("SSLMate MCP Server started successfully")
 
         except Exception as e:
@@ -270,7 +305,6 @@ class SSLMateMCPServer:
 
         try:
             await self.sslmate_client.close()
-            await self.mcp_server.stop()
             logger.info("SSLMate MCP Server stopped successfully")
 
         except Exception as e:
@@ -284,6 +318,7 @@ class DaemonRunner:
         self.server = server
         self.pid_file = pid_file
         self.running = True
+        self.server_task = None
 
     def _write_pid_file(self):
         """Write the current process ID to the PID file"""
@@ -307,6 +342,8 @@ class DaemonRunner:
         """Handle shutdown signals"""
         logger.info(f"Received signal {signum}, shutting down...")
         self.running = False
+        if self.server_task:
+            self.server_task.cancel()
 
     async def run_daemon(self):
         """Run the server in daemon mode"""
@@ -318,13 +355,15 @@ class DaemonRunner:
         self._write_pid_file()
 
         try:
-            # Start the server
-            await self.server.start()
+            # Start the server as a background task
+            self.server_task = asyncio.create_task(self.server.start())
 
             # Keep running until shutdown signal
             while self.running:
                 await asyncio.sleep(1)
 
+        except asyncio.CancelledError:
+            logger.info("Server task cancelled")
         except Exception as e:
             logger.error(f"Error in daemon mode: {e}")
 
@@ -380,14 +419,18 @@ async def main():
             await daemon.run_daemon()
         else:
             # Run in foreground
-            await server.start()
+            server_task = asyncio.create_task(server.start())
 
             # Wait for interrupt
             try:
-                while True:
-                    await asyncio.sleep(1)
+                await server_task
             except KeyboardInterrupt:
                 logger.info("Received interrupt, shutting down...")
+                server_task.cancel()
+                try:
+                    await server_task
+                except asyncio.CancelledError:
+                    pass
             finally:
                 await server.stop()
 
