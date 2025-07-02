@@ -63,7 +63,7 @@ Set up your environment variables:
 
 ```bash
 export SSLMATE_API_KEY="your-sslmate-api-key"
-export MCP_PORT="3002"  # Optional, defaults to 3002
+export MCP_PORT="3010"  # Optional, defaults to 3010
 export LOG_LEVEL="INFO"  # Optional, defaults to INFO
 ```
 
@@ -71,7 +71,7 @@ Alternatively, create a `.env` file:
 
 ```env
 SSLMATE_API_KEY=your-sslmate-api-key
-MCP_PORT=3002
+MCP_PORT=3010
 LOG_LEVEL=INFO
 ```
 
@@ -231,11 +231,11 @@ cd sslmate-mcp
 # Set your API key
 export SSLMATE_API_KEY="your-sslmate-api-key"
 
-# Test the server (it should start on port 3002)
+# Test the server (it should start on port 3010)
 uv run sslmate_mcp.py
 ```
 
-Verify the server is working by visiting `http://localhost:3002` in your browser.
+Verify the server is working by visiting `http://localhost:3010` in your browser.
 
 #### 2. Configure Claude Desktop
 
@@ -257,7 +257,7 @@ Create or edit this file with the following configuration:
       ],
       "env": {
         "SSLMATE_API_KEY": "your-sslmate-api-key",
-        "MCP_PORT": "3002",
+        "MCP_PORT": "3010",
         "LOG_LEVEL": "INFO"
       }
     }
@@ -363,7 +363,7 @@ Search for certificates for "*.github.com"
 
 #### Server Not Starting
 - Check that your SSLMate API key is correct
-- Verify that port 3002 is not in use by another application
+- Verify that port 3010 is not in use by another application
 - Check the logs in the Claude Desktop developer tools
 
 #### Tools Not Appearing in Claude
@@ -390,7 +390,7 @@ To debug MCP integration issues:
 2. **Run the server manually first:**
    ```bash
    uv run sslmate_mcp.py
-   # Test at http://localhost:3002
+   # Test at http://localhost:3010
    ```
 
 3. **Check Claude Desktop logs:**
@@ -399,7 +399,7 @@ To debug MCP integration issues:
 
 4. **Test server endpoints directly:**
    ```bash
-   curl -X POST http://localhost:3002/tools/search_certificates \
+   curl -X POST http://localhost:3010/tools/search_certificates \
      -H "Content-Type: application/json" \
      -d '{"query": "example.com"}'
    ```

@@ -161,12 +161,12 @@ class TestSSLMateMCPServer:
     @pytest.fixture
     def mcp_server(self):
         """Fixture for MCP server instance"""
-        return SSLMateMCPServer("test-api-key", 3002)
+        return SSLMateMCPServer("test-api-key", 3010)
 
     def test_server_initialization(self, mcp_server):
         """Test server initialization"""
         assert mcp_server.api_key == "test-api-key"
-        assert mcp_server.port == 3002
+        assert mcp_server.port == 3010
         assert mcp_server.sslmate_client is not None
         assert mcp_server.mcp_server is not None
 
@@ -178,7 +178,7 @@ class TestSSLMateMCPServer:
              patch.object(mcp_server.sslmate_client, 'close') as mock_close:
 
             await mcp_server.start()
-            mock_start.assert_called_once_with(port=3002)
+            mock_start.assert_called_once_with(port=3010)
 
             await mcp_server.stop()
             mock_stop.assert_called_once()

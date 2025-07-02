@@ -22,7 +22,7 @@ Usage:
 
 Environment Variables:
     SSLMATE_API_KEY: Your SSLMate API key (required)
-    MCP_PORT: Port to run the MCP server on (default: 3002)
+    MCP_PORT: Port to run the MCP server on (default: 3010)
     LOG_LEVEL: Logging level (default: INFO)
 """
 
@@ -49,7 +49,7 @@ load_dotenv()
 
 # Configuration
 SSLMATE_API_BASE = "https://api.sslmate.com/v1"
-DEFAULT_PORT = int(os.getenv("MCP_PORT", "3002"))
+DEFAULT_PORT = int(os.getenv("MCP_PORT", "3010"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 # Setup logging
